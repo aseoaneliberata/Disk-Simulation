@@ -103,7 +103,11 @@ public class prog3 {
 	public static void fcfs() {
 		ccyl = 0;
 		csec = 0;
-		t = 0;
+		t = req[0].submit;
+
+		while (t % ns != 0) {
+			t++;
+		}
 
 		if (debug) {
 			System.out.printf("Debug output for FCFS algorithm\n");
@@ -111,6 +115,7 @@ public class prog3 {
 		}
 
 		for (int j = 0; j < nr; j++) {
+
 			if (debug) {
 				System.out.println("Request " + (j + 1) + " (" + req[j].nsec + " sec @ lba " + req[j].addr
 						+ ") start at t = " + t + " (disk @ cyl " + ccyl + ")");
@@ -118,32 +123,25 @@ public class prog3 {
 				System.out.println("	chs = " + req[j].acyl + " / " + req[j].atrk + " / " + req[j].asec);
 			}
 
-			if (t == 0 && req[0].acyl == 0) {
+			int temp = seek(req[j].acyl);
+			t += temp;
+			ccyl = req[j].acyl;
 
-			} else {
-				int temp = seek(req[j].acyl);
-				t += temp;
-				if (debug) {
-					System.out.println("	seek to cylinder " + req[j].acyl + " completed at t = " + t);
-				}
-				ccyl = req[j].acyl;
+			if (debug) {
+				System.out.println("	seek to cylinder " + ccyl + " completed at t = " + t);
 			}
 
 			int latency = (req[j].asec + ns - csec) % ns;
+
 			t += latency;
 			csec = req[j].asec;
+
 			if (debug) {
 				System.out.println("	rotational latency to sector " + req[j].asec + " completed at t = " + t);
 			}
+
 			t += req[j].nsec;
-			
 			csec += req[j].nsec;
-			
-			while (csec > ns) {
-				req[j].asec -= ns;
-				csec = req[j].asec;
-				req[j].atrk++;
-			}
 
 			if (debug) {
 				System.out.println("	request completed at t = " + t);
@@ -157,43 +155,57 @@ public class prog3 {
 	public static void sstf() {
 		ccyl = 0;
 		csec = 0;
-		t = 0;
+		t = req[0].submit;
+
+		while (t % ns != 0) {
+			t++;
+		}
 
 		if (debug) {
-			System.out.printf("Debug output for FCFS algorithm\n");
+			System.out.printf("Debug output for SSTF algorithm\n");
 			System.out.printf("=============================\n");
 		}
 
-		// store requests in a list
-		// ioreq[] aux = new ioreq[nr];
+		// Keep track of the processed requests with an array of ints that store
+		// the index of each process, and then -1 after the request being
+		// processed
 		int[] aux = new int[nr];
-
 		for (int i = 0; i < nr; i++) {
 			aux[i] = i;
 		}
 
+		// minIndex doesn't have to be initialized every loop
 		int minIndex = 0;
 
-		// There will be "nr" requests to be processed
+		// We want to process all the requests, so loop "nr" times
 		for (int i = 0; i < nr; i++) {
 
 			// Loop through the array looking for the shortest time
+			// Initialize the minimum distance to the max value of integer
 			int minDistance = Integer.MAX_VALUE;
+
+			// double loop... avoid
 			for (int j = 0; j < aux.length; j++) {
 
+				// if the request was already processed, jump to the next one
 				if (aux[j] == -1) {
 					continue;
 				}
 
+				// calculates and stores the seek time
 				int distance = seek(req[j].acyl);
 
+				// in case that the distance is the same, the first one goes
+				// first since it is the one waiting the longest.s
 				if (minDistance == distance) {
-					if (req[minIndex].submit > req[j].submit) {
-						minDistance = distance;
-						minIndex = j;
-					}
+					// if (req[minIndex].submit > req[j].submit) {
+					// minDistance = distance;
+					// minIndex = j;
+					// }
 				}
 
+				// if the current request has a seek time smaller than what the
+				// program thought that it was the minimum, save it
 				if (minDistance > distance) {
 					minDistance = distance;
 					minIndex = j;
@@ -226,13 +238,18 @@ public class prog3 {
 
 			// add transfer time
 			t += req[minIndex].nsec;
-
 			csec += req[minIndex].nsec;
+
 			// Check for overload of sectors, that is, more sectors than "ns"
-			while (csec > ns) {
-				req[minIndex].asec -= ns;
-				csec = req[minIndex].asec;
-				req[minIndex].atrk++;
+
+			if (csec > ns) {
+				int temp = csec;
+				while (csec >= ns) {
+					// req[minIndex].asec -= ns;
+					temp -= ns;
+					req[minIndex].atrk++;
+					csec = temp;
+				}
 			}
 
 			if (debug) {
@@ -245,7 +262,6 @@ public class prog3 {
 			// Once the request is processed, nullify it
 			aux[minIndex] = -1;
 		}
-
 		display("SSTF");
 	}
 
@@ -485,6 +501,7 @@ public class prog3 {
 			System.out.printf("Sectors per track (ns):\t\t\t" + ns + "\n");
 			System.out.printf("\"Short\" seek time per cylinder (s1):\t" + s1 + "\n");
 			System.out.printf("\"Long\" seek time per cylinder (s2):\t" + s2 + "\n");
+			System.out.printf("\"Short\" seek limit in cylinders (d):\t" + d + "\n");
 			System.out.println();
 		}
 
@@ -505,8 +522,8 @@ public class prog3 {
 		System.out.println();
 		sstf();
 		System.out.println();
-		look();
+		// look();
 		System.out.println();
-		clook();
+		// clook();
 	}
 }
