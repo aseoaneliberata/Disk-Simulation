@@ -4,7 +4,7 @@ import java.util.Scanner;
 
 public class prog3 {
 
-	private static boolean debug = true;
+	private static boolean debug = false;
 
 	private static final int MAXCYL = 100; /* maximum number of cylinders */
 	private static final int MAXTRK = 100; /*
@@ -74,7 +74,6 @@ public class prog3 {
 		}
 
 		System.out.println();
-
 	}
 
 	/*--------------------------------------------*/
@@ -115,37 +114,34 @@ public class prog3 {
 		}
 
 		for (int j = 0; j < nr; j++) {
-
 			if (debug) {
 				System.out.println("Request " + (j + 1) + " (" + req[j].nsec + " sec @ lba " + req[j].addr
 						+ ") start at t = " + t + " (disk @ cyl " + ccyl + ")");
-
-				System.out.println("	chs = " + req[j].acyl + " / " + req[j].atrk + " / " + req[j].asec);
 			}
 
+			// System.out.println(" chs = " + req[j].acyl + " / " + req[j].atrk
+			// + " / " + req[j].asec);
+
+			// if (t == 0 && req[0].acyl == 0) {
+
+			// } else {
 			int temp = seek(req[j].acyl);
 			t += temp;
+			// System.out.println(" seek to cylinder " + req[j].acyl + "
+			// completed at t = " + t);
 			ccyl = req[j].acyl;
-
-			if (debug) {
-				System.out.println("	seek to cylinder " + ccyl + " completed at t = " + t);
-			}
+			// }
 
 			int latency = (req[j].asec + ns - csec) % ns;
-
 			t += latency;
 			csec = req[j].asec;
 
-			if (debug) {
-				System.out.println("	rotational latency to sector " + req[j].asec + " completed at t = " + t);
-			}
+			System.out.println("	rotational latency to sector " + req[j].asec + " completed at t = " + t);
 
 			t += req[j].nsec;
 			csec += req[j].nsec;
 
-			if (debug) {
-				System.out.println("	request completed at t = " + t);
-			}
+			// System.out.println(" request completed at t = " + t);
 			req[j].t_stop = t;
 		}
 
@@ -169,9 +165,8 @@ public class prog3 {
 		// Keep track of the processed requests with an array of ints that store
 		// the index of each process, and then -1 after the request being
 		// processed
-		int[] aux = new int[nr];
 		for (int i = 0; i < nr; i++) {
-			aux[i] = i;
+			req[i].done = false;
 		}
 
 		// minIndex doesn't have to be initialized every loop
@@ -185,10 +180,10 @@ public class prog3 {
 			int minDistance = Integer.MAX_VALUE;
 
 			// double loop... avoid
-			for (int j = 0; j < aux.length; j++) {
+			for (int j = 0; j < req.length; j++) {
 
 				// if the request was already processed, jump to the next one
-				if (aux[j] == -1) {
+				if (req[j].done) {
 					continue;
 				}
 
@@ -240,18 +235,6 @@ public class prog3 {
 			t += req[minIndex].nsec;
 			csec += req[minIndex].nsec;
 
-			// Check for overload of sectors, that is, more sectors than "ns"
-
-			if (csec > ns) {
-				int temp = csec;
-				while (csec >= ns) {
-					// req[minIndex].asec -= ns;
-					temp -= ns;
-					req[minIndex].atrk++;
-					csec = temp;
-				}
-			}
-
 			if (debug) {
 				System.out.println("	request completed at t = " + t);
 			}
@@ -260,7 +243,7 @@ public class prog3 {
 			req[minIndex].t_stop = t;
 
 			// Once the request is processed, nullify it
-			aux[minIndex] = -1;
+			req[minIndex].done = true;
 		}
 		display("SSTF");
 	}
@@ -268,121 +251,154 @@ public class prog3 {
 	public static void look() {
 		ccyl = 0;
 		csec = 0;
-		t = 0;
+		t = req[0].submit;
 
-		boolean up = true;
+		/*
+		 * while(t % ns != 0){ t++; }
+		 */
 
-		ArrayList<ioreq> upSweep = new ArrayList<ioreq>();
-		ArrayList<ioreq> downSweep = new ArrayList<ioreq>();
+		boolean upsweep = true;
 
-		// Requests are taken from the upSweep queue
+		ArrayList<ioreq> Sweep = new ArrayList<ioreq>();
+
 		for (int i = 0; i < nr; i++) {
-			upSweep.add(req[i]);
+			Sweep.add(req[i]);
 		}
 
-		while (!upSweep.isEmpty() && !downSweep.isEmpty()) {
-			if (up) {
-				for (int i = 0; i < upSweep.size(); i++) {
-					// store the current request
-					ioreq current = upSweep.get(i);
+		while (!Sweep.isEmpty()) {
 
-					// remove it from the queue since it is being processed
-					upSweep.remove(i);
+			for (int i = 0; i < Sweep.size(); i++) {
+				ioreq current = Sweep.get(i);
+				if (upsweep && current.acyl > ccyl || !upsweep && current.acyl < ccyl) {
+					System.out.printf("The value of the cylinder is %d\n", current.acyl);
+					System.out.printf("The size of the array before sweep removal is %d\n", Sweep.size());
+					Sweep.remove(i);
+					System.out.printf("The size of the array after sweep removal is %d\n", Sweep.size());
 
-					// request arriving late are not processed yet
-					if (current.acyl == ccyl) {
-						continue;
+					if (t < req[i].submit) {
+						t = req[i].submit;
 					}
 
-					// requests for the same cylinder are added to the other
-					// queue
-					if (current.acyl < ccyl) {
-						downSweep.add(current);
-						continue;
-					}
-
-					// if all checks, process it
-
-					if (t == 0 && req[0].acyl == 0) {
-
-					} else {
-						int temp = seek(current.acyl);
-						t += temp;
-						ccyl = current.acyl;
-					}
+					int temp = seek(current.acyl);
+					System.out.printf("The value of t is %d\n", t);
+					ccyl = current.acyl;
+					csec = t % ns;
 
 					int latency = (current.asec + ns - csec) % ns;
-					t += latency;
-					csec = current.asec;
+					System.out.printf("latency is %d\n", latency);
+					System.out.printf("The value of t is %d\n", t);
 
-					t += current.nsec;
-					csec += current.nsec;
+					t += current.nsec + temp + latency;
 
-					// look for this request and update when it ended
+					// if ((i < nr - 1) && (t < req[i + 1].submit)) {
+					// t = req[i].submit;
+					// }
 
 					for (int j = 0; j < req.length; j++) {
 						if (current.submit == req[j].submit) {
 							req[j].t_stop = t;
+							break;
 						}
 					}
+				} else {
+					upsweep = !upsweep;
 				}
-
-			} else {
-				for (int i = downSweep.size() - 1; i >= 0; i--) {
-					// store the current request
-					ioreq current = downSweep.get(i);
-
-					// remove it from the queue since it is being processed
-					downSweep.remove(i);
-
-					// request arriving late are not processed yet
-					if (current.acyl == ccyl) {
-						continue;
-					}
-
-					// requests for the same cylinder are added to the other
-					// queue
-					if (current.acyl > ccyl) {
-						upSweep.add(current);
-						continue;
-					}
-
-					// if all checks, process it
-
-					if (t == 0 && req[0].acyl == 0) {
-
-					} else {
-						int temp = seek(current.acyl);
-						t += temp;
-						ccyl = current.acyl;
-					}
-
-					int latency = (current.asec + ns - csec) % ns;
-					t += latency;
-					csec = current.asec;
-
-					t += current.nsec;
-					csec += current.nsec;
-
-					// look for this request and update when it ended
-
-					for (int j = 0; j < req.length; j++) {
-						if (current.submit == req[j].submit) {
-							req[j].t_stop = t;
-						}
-					}
-				}
-
 			}
-			up = !up;
-
 		}
 
 		display("LOOK");
 	}
 
 	public static void clook() {
-		// display("CLOOK");
+
+		ccyl = 0;
+		csec = 0;
+		t = req[0].submit;
+
+		// initialize all to done = false;
+		for (int i = 0; i < req.length; i++) {
+			req[i].done = false;
+			req[i].now = false;
+		}
+
+		// bubble sort (1st - cylinders, 2nd - submit)
+		boolean swapped = true;
+		int j = 0;
+		ioreq tmp;
+		while (swapped) {
+			swapped = false;
+			j++;
+			for (int i = 0; i < req.length - j; i++) {
+				if (req[i].acyl > req[i + 1].acyl) {
+					tmp = req[i];
+					req[i] = req[i + 1];
+					req[i + 1] = tmp;
+					swapped = true;
+				} else if (req[i].acyl == req[i + 1].acyl) {
+					if (req[i].submit > req[i + 1].submit) {
+						tmp = req[i];
+						req[i] = req[i + 1];
+						req[i + 1] = tmp;
+						swapped = true;
+					}
+				}
+			}
+		}
+
+		int completed = 0;
+
+		req[0].now = true;
+
+		while (completed < nr) {
+			boolean skip = false;
+			for (int i = 0; i < req.length; i++) {
+				// deals with the first case and a possible queue (those
+				// assigned with now)
+				if (req[i].done == false && req[i].now == true && req[i].acyl >= ccyl) {
+
+					if (t < req[i].submit) {
+						t = req[i].submit;
+					}
+
+					int temp = seek(req[i].acyl);
+					t += temp;
+					ccyl = req[i].acyl;
+
+					int latency = (req[i].asec + ns - csec) % ns;
+					t += latency;
+					csec = req[i].asec;
+
+					t += req[i].nsec;
+					csec += req[i].nsec;
+
+					req[i].t_stop = t;
+					req[i].done = true;
+					req[i].now = false;
+
+					skip = true;
+					completed++;
+				}
+
+				// if there is no "now" queue or nothing gets selected, the next
+				// request that arrives
+				// is processed
+
+				if (skip) {
+					continue;
+				}
+
+				for (int k = 0; k < req.length; k++) {
+					if (!req[k].done && req[k].submit < t) {
+						req[k].now = true;
+						break;
+					}
+				}
+				
+				
+			}
+		}
+
+		display("CLOOK");
 	}
 
 	/*------------------------------------------------------*/
@@ -501,7 +517,6 @@ public class prog3 {
 			System.out.printf("Sectors per track (ns):\t\t\t" + ns + "\n");
 			System.out.printf("\"Short\" seek time per cylinder (s1):\t" + s1 + "\n");
 			System.out.printf("\"Long\" seek time per cylinder (s2):\t" + s2 + "\n");
-			System.out.printf("\"Short\" seek limit in cylinders (d):\t" + d + "\n");
 			System.out.println();
 		}
 
@@ -524,6 +539,6 @@ public class prog3 {
 		System.out.println();
 		// look();
 		System.out.println();
-		// clook();
+		clook();
 	}
 }

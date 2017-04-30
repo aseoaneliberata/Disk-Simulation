@@ -20,8 +20,8 @@ public class ioreq {
 	/*-------*/
 	/* Flags */
 	/*-------*/
-	public int done; /* for all but FCFS, 0 if request is active */
-	public int now; /* for LOOK and C-LOOK */
+	public boolean done; /* for all but FCFS, 0 if request is active */
+	public boolean now; /* for LOOK and C-LOOK */
 	
 	public ioreq (int submit, int addr, int nsec) {
 		this.submit = submit;
